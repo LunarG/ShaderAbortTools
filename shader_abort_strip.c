@@ -16,7 +16,7 @@ bool has_shader_abort(const uint32_t* pCode, size_t codeSize) {
     while (in_offset < word_count) {
         uint32_t instruction = pCode[in_offset];
         uint32_t opcode = instruction & 0xFFFF;
-        uint32_t word_count = instruction >> 16;
+        uint32_t length = instruction >> 16;
 
         if (opcode == _OpCapability) {
             uint32_t capability = pCode[in_offset + 1];
@@ -27,7 +27,7 @@ bool has_shader_abort(const uint32_t* pCode, size_t codeSize) {
             // Capabilities are always first, nothing can be before
             break;
         }
-        in_offset += word_count;
+        in_offset += length;
     }
 
     return false;
@@ -62,10 +62,10 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
     while (in_offset < code_size_in) {
         uint32_t instruction = spirv_in[in_offset];
         uint32_t opcode = instruction & 0xFFFF;
-        uint32_t word_count = instruction >> 16;
+        uint32_t length = instruction >> 16;
 
-        if (word_count == 0) {
-            return -1;
+        if (length == 0) {
+          return -1;
         }
 
         bool remove_inst = false;
@@ -84,16 +84,16 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
                 strcmp(extension_name, "SPV_KHR_constant_data") == 0) {
                 remove_inst = true;
             }
-        } else if (opcode == _OpDecorate && word_count >= 3) {
-            uint32_t decoration = spirv_in[in_offset + 2];
-            if (decoration == _DecorationUTFEncodedKHR) {
-                remove_inst = true;
-            }
+        } else if (opcode == _OpDecorate && length >= 3) {
+          uint32_t decoration = spirv_in[in_offset + 2];
+          if (decoration == _DecorationUTFEncodedKHR) {
+            remove_inst = true;
+          }
         } else if (opcode == _OpAbortKHR) {
-            make_unreachable = true;
+          make_unreachable = true;
         } else if (opcode == _OpConstantDataKHR ||
-                 opcode == _OpSpecConstantDataKHR) {
-            make_null = true;
+                   opcode == _OpSpecConstantDataKHR) {
+          make_null = true;
         }
 
         if (remove_inst) {
@@ -115,13 +115,13 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
             out_offset += 3;
         } else {
             // normal case, add the full word
-            for (size_t i = 0; i < word_count; ++i) {
-                spirv_out[out_offset + i] = spirv_in[in_offset + i];
+            for (size_t i = 0; i < length; ++i) {
+              spirv_out[out_offset + i] = spirv_in[in_offset + i];
             }
-            out_offset += word_count;
+            out_offset += length;
         }
 
-        in_offset += word_count;
+        in_offset += length;
     }
 
     *code_size_out = out_offset * 4;
