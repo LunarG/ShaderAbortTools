@@ -5,6 +5,45 @@
 #include <stdio.h>
 #include <string.h>
 
+// Returns the word offset (from the start of the instruction) of the Decoration operand for every
+// instruction that decorates something, or 0 if |opcode| is not a decorate instruction.
+static size_t decoration_operand_offset(uint32_t opcode) {
+    // From spirv.h
+    const uint32_t _OpDecorate = 71;
+    const uint32_t _OpMemberDecorate = 72;
+    const uint32_t _OpDecorateId = 332;
+    const uint32_t _OpDecorateString = 5632;        // OpDecorateStringGOOGLE
+    const uint32_t _OpMemberDecorateString = 5633;  // OpMemberDecorateStringGOOGLE
+
+    if (opcode == _OpDecorate || opcode == _OpDecorateId || opcode == _OpDecorateString) {
+        return 2;  // OpDecorate <target> <decoration> ...
+    }
+    if (opcode == _OpMemberDecorate || opcode == _OpMemberDecorateString) {
+        return 3;  // OpMemberDecorate <struct type> <member> <decoration> ...
+    }
+    return 0;
+}
+
+// Returns true if |id| is the Result <id> of an OpSpecConstantDataKHR. Those get turned into plain
+// OpConstantNull, so a SpecId decoration pointing at them would no longer be legal.
+static bool is_spec_constant_data_id(const uint32_t* spirv, size_t word_count, uint32_t id) {
+    const uint32_t _OpSpecConstantDataKHR = 5148;
+
+    size_t offset = 5;  // skip the SPIR-V header
+    while (offset < word_count) {
+        uint32_t opcode = spirv[offset] & 0xFFFF;
+        uint32_t length = spirv[offset] >> 16;
+        if (length == 0 || length > word_count - offset) {
+            return false;
+        }
+        if (opcode == _OpSpecConstantDataKHR && length >= 3 && spirv[offset + 2] == id) {
+            return true;
+        }
+        offset += length;
+    }
+    return false;
+}
+
 bool has_shader_abort(const uint32_t* pCode, size_t codeSize) {
     // From spirv.h
     const uint32_t _OpCapability = 17;
@@ -38,11 +77,12 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
     const uint32_t _OpCapability = 17;
     const uint32_t _OpExtension = 10;
     const uint32_t _OpConstantNull = 46;
-    const uint32_t _OpDecorate = 71;
     const uint32_t _OpUnreachable = 255;
     const uint32_t _CapabilityAbortKHR = 5120;
     const uint32_t _CapabilityConstantDataKHR = 5146;
     const uint32_t _OpAbortKHR = 5121;
+    const uint32_t _OpDecorate = 71;
+    const uint32_t _DecorationSpecId = 1;
     const uint32_t _DecorationUTFEncodedKHR = 5145;
     const uint32_t _OpConstantDataKHR = 5147;
     const uint32_t _OpSpecConstantDataKHR = 5148;
@@ -71,6 +111,7 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
         bool remove_inst = false;
         bool make_null = false;
         bool make_unreachable = false;
+        const size_t decoration_offset = decoration_operand_offset(opcode);
 
         // now strip the Capabilities, Extensions, Decorations and the Opcodes
         if (opcode == _OpCapability) {
@@ -84,9 +125,13 @@ int strip_abort_extensions(const uint32_t* spirv_in, size_t code_size_in, uint32
                 strcmp(extension_name, "SPV_KHR_constant_data") == 0) {
                 remove_inst = true;
             }
-        } else if (opcode == _OpDecorate && length >= 3) {
-          uint32_t decoration = spirv_in[in_offset + 2];
+        } else if (decoration_offset != 0 && length > decoration_offset) {
+          uint32_t decoration = spirv_in[in_offset + decoration_offset];
           if (decoration == _DecorationUTFEncodedKHR) {
+            remove_inst = true;
+          } else if (opcode == _OpDecorate && decoration == _DecorationSpecId &&
+                     is_spec_constant_data_id(spirv_in, code_size_in, spirv_in[in_offset + 1])) {
+            // OpSpecConstantDataKHR becomes OpConstantNull below, and SpecId is only legal on spec constants
             remove_inst = true;
           }
         } else if (opcode == _OpAbortKHR) {
