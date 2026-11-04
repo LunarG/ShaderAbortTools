@@ -1,12 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com
 // SPDX-License-Identifier: MIT
 
- #include <stdio.h>
- #include <stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #include "shader_abort_strip.h"
 
-// This is purley here to allow testing with a binary
+// This is purely here to allow testing with a binary
 int main(int argc, char** argv) {
     if (argc != 3) {
         printf("Usage: %s <input.spv> <output.spv>\n", argv[0]);
