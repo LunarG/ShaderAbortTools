@@ -119,8 +119,7 @@ int strip_abort_extensions(const uint32_t* pCode, size_t codeSize, uint32_t* out
             }
         } else if (opcode == kOpExtension) {
             const char* extension_name = (const char*)(&pCode[in_offset + 1]);
-            if (strcmp(extension_name, "SPV_KHR_abort") == 0 ||
-                strcmp(extension_name, "SPV_KHR_constant_data") == 0) {
+            if (strcmp(extension_name, "SPV_KHR_abort") == 0 || strcmp(extension_name, "SPV_KHR_constant_data") == 0) {
                 remove_inst = true;
             }
         } else if (decoration_offset != 0 && length > decoration_offset) {
@@ -152,8 +151,8 @@ int strip_abort_extensions(const uint32_t* pCode, size_t codeSize, uint32_t* out
             // we just replace it with
             // %a = OpConstantNull %type
             out_pCode[out_offset] = (3 << 16) | kOpConstantNull;
-            out_pCode[out_offset + 1] = pCode[in_offset + 1]; // Keep original Result Type <id>
-            out_pCode[out_offset + 2] = pCode[in_offset + 2]; // Keep original Result <id>
+            out_pCode[out_offset + 1] = pCode[in_offset + 1];  // Keep original Result Type <id>
+            out_pCode[out_offset + 2] = pCode[in_offset + 2];  // Keep original Result <id>
             out_offset += 3;
         } else {
             // normal case, copy the whole instruction

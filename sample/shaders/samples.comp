@@ -1,0 +1,69 @@
+// SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com
+// SPDX-License-Identifier: MIT
+
+// Compiled into samples_glsl.spv by the commands in sample/README.md ("Changing the shaders")
+#version 450
+#extension GL_GOOGLE_include_directive : require
+
+// GL_EXT_abort (abortEXT) and the SHADER_ASSERT macros
+#include "shader_abort.glsl"
+
+layout(local_size_x = 64) in;
+
+layout(push_constant) uniform PushConstants {
+    // which sample to run, matches the Sample enum in sample.c
+    uint sample_id;
+
+    // constants in sample.c to show dynamic input
+    uint index;
+    uint count;
+    float value;
+} pc;
+
+const uint SAMPLE_BASIC = 0u;
+const uint SAMPLE_FORMAT = 1u;
+const uint SAMPLE_TYPES = 2u;
+const uint SAMPLE_MULTIPLE = 3u;
+const uint SAMPLE_EACH = 4u;
+const uint SAMPLE_ASSERT = 5u;
+const uint SAMPLE_STRIP = 6u;
+
+void main() {
+    const uint invocation = gl_LocalInvocationIndex;
+
+    if (pc.sample_id == SAMPLE_BASIC) {
+        // The simplest abort there is, a message with no arguments
+        if (invocation == 0u) {
+            abortEXT("Hello from the basic sample!");
+        }
+
+    } else if (pc.sample_id == SAMPLE_FORMAT) {
+        // Arguments work like printf
+        if (invocation == 0u) {
+            abortEXT("index %u is out of range (count %u), value was %f", pc.index, pc.count, pc.value);
+        }
+
+    } else if (pc.sample_id == SAMPLE_TYPES) {
+        // More of the format specifiers (vectors, signed, hex with flags/width, precision, etc)
+        if (invocation == 0u) {
+            abortEXT("vector %v3u, negative %d, hex 0x%08x, rounded %.2f", uvec3(pc.index, pc.count, invocation),
+                     -int(pc.count), pc.index, pc.value);
+        }
+
+    } else if (pc.sample_id == SAMPLE_MULTIPLE || pc.sample_id == SAMPLE_EACH) {
+        // 4 invocations abort (0, 16, 32, 48).
+        // Only the first abort has to be reported, a device can report more.
+        if ((invocation % 16u) == 0u) {
+            abortEXT("invocation %u aborted", invocation);
+        }
+
+    } else if (pc.sample_id == SAMPLE_ASSERT) {
+        // The macros from shader_abort.glsl.
+        SHADER_ASSERT_BOUNDS(pc.index, pc.count);
+        SHADER_ASSERT_1(pc.value >= 0.0, "value must not be negative, it was %f", pc.value);
+
+    } else if (pc.sample_id == SAMPLE_STRIP) {
+        // Does nothing.
+        // The 'strip' sample runs this after stripping the aborts out of the shader.
+    }
+}
