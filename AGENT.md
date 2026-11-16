@@ -10,6 +10,7 @@ message layout is easy to get subtly wrong, and these files are tested against w
 | Shader asserts that can be compiled out | `shader_abort.glsl` or `shader_abort.slang` |
 | Run a shader with abort on a device without the extension | `shader_abort_strip.c`/`.h` |
 | Find the aborts in a SPIR-V module, or where each argument is in the payload | `shader_abort_reflect.c`/`.h` |
+| Strip or reflect a `.spv` file from the command line | `sample/strip.c`, `sample/reflect.c` (`./strip shader.spv`, `./reflect shader.spv`) |
 | A complete, working example of the whole flow | `sample/sample.c` |
 
 Facts, checked against the Vulkan headers (SDK 1.4.357.1), glslang and Slang 2026.21:
@@ -42,7 +43,7 @@ Facts, checked against the Vulkan headers (SDK 1.4.357.1), glslang and Slang 202
 * **Only the first abort is guaranteed to be reported.** More may come back, so handle 0, 1, or many messages.
 * **The format specifier must match the argument's type**, including its size: `%hd` for `int16_t`, `%hhu` for
   `uint8_t`, `%hf` for `float16_t`, `%lu` for `uint64_t`, `%lf` for `double`. A `bool` is a 32-bit `uint`.
-* **Known RADV issues** (Mesa 27.0.0-devel, `0b6d3f401e`), found with the samples:
+* **Known RADV issues** (seen on Mesa 27.0.0-devel, `0b6d3f401e`, not re-checked on newer builds), found with the samples:
   * Messages larger than 65528 bytes are dropped, even though `maxShaderAbortMessageSize` is 65536.
   * When the messages of many invocations add up to more than 64 KiB, `messageDataSize` counts the ones that didn't
     fit, and the driver copies memory from past the end of its buffer. The extra bytes are zeros or garbage, and zeros
@@ -107,7 +108,7 @@ start of the payload), and the components of a vector are packed together one af
 
 Because of that, `shader_abort_message.c` is not general to every possible message type. A shader written directly in
 SPIR-V, or by a compiler that packs differently, may need its own reader, and
-[`shader_abort_reflect.c`](#reflecting-the-aborts-in-a-shader) tells it where every argument is. The messages from the same compilers are
+[`shader_abort_reflect.c`](README.md#reflecting-the-aborts-in-a-shader) tells it where every argument is. The messages from the same compilers are
 checked against the real SPIR-V layouts by the tests.
 
 **Writing your own decoder?** These are the mistakes that are easy to make:

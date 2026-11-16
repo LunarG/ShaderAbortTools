@@ -32,6 +32,8 @@
 #ifndef SHADER_ABORT_DISABLE
 
 #define SHADER_ASSERT(cond, ...) do { if (!(cond)) { abort(__VA_ARGS__); } } while (false)
+
+// SHADER_ASSERT_1 to _4 are only here so the same assert lines compile in both shader_abort.glsl and this file
 #define SHADER_ASSERT_1(cond, fmt, a) SHADER_ASSERT(cond, fmt, a)
 #define SHADER_ASSERT_2(cond, fmt, a, b) SHADER_ASSERT(cond, fmt, a, b)
 #define SHADER_ASSERT_3(cond, fmt, a, b, c) SHADER_ASSERT(cond, fmt, a, b, c)

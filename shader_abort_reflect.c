@@ -37,7 +37,7 @@ enum {
 // Deeper than any real Message Type, it only stops a malformed module from recursing forever
 enum { kMaxTypeDepth = 16 };
 
-typedef struct Module {
+typedef struct ReflectModule {
     const uint32_t* pWords;
     size_t word_count;
     uint32_t* pIdToOffset;  // word offset of the instruction that defines an <id>, 0 if it isn't one this file needs
@@ -46,7 +46,7 @@ typedef struct Module {
     // Both 0 if there are none.
     size_t decoration_begin;
     size_t decoration_end;
-} Module;
+} ReflectModule;
 
 static uint32_t opcode_of(const uint32_t* pInst) { return pInst[0] & 0xFFFF; }
 static uint32_t length_of(const uint32_t* pInst) { return pInst[0] >> 16; }
@@ -77,15 +77,15 @@ static uint32_t result_id_operand(uint32_t opcode) {
     }
 }
 
-static const uint32_t* find_definition(const Module* pModule, uint32_t id) {
+static const uint32_t* find_definition(const ReflectModule* pModule, uint32_t id) {
     const uint32_t offset = pModule->pIdToOffset[id];
     return offset != 0 ? pModule->pWords + offset : NULL;
 }
 
 // The first literal of an OpMemberDecorate, or |fallback| if the member doesn't have that decoration.
 // RowMajor has no literal, check it with has_member_decoration().
-static uint32_t find_member_decoration(const Module* pModule, uint32_t struct_id, uint32_t member, uint32_t decoration,
-                                       uint32_t fallback) {
+static uint32_t find_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member,
+                                       uint32_t decoration, uint32_t fallback) {
     for (size_t i = pModule->decoration_begin; i < pModule->decoration_end; i += length_of(pModule->pWords + i)) {
         const uint32_t* pInst = pModule->pWords + i;
         if (opcode_of(pInst) == kOpMemberDecorate && pInst[1] == struct_id && pInst[2] == member &&
@@ -96,12 +96,13 @@ static uint32_t find_member_decoration(const Module* pModule, uint32_t struct_id
     return fallback;
 }
 
-static bool has_member_decoration(const Module* pModule, uint32_t struct_id, uint32_t member, uint32_t decoration) {
+static bool has_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member,
+                                  uint32_t decoration) {
     return find_member_decoration(pModule, struct_id, member, decoration, 0) != 0;
 }
 
 // The first literal of an OpDecorate, or |fallback|. For a decoration with no literal, returns 1 if it is there.
-static uint32_t find_decoration(const Module* pModule, uint32_t id, uint32_t decoration, uint32_t fallback) {
+static uint32_t find_decoration(const ReflectModule* pModule, uint32_t id, uint32_t decoration, uint32_t fallback) {
     for (size_t i = pModule->decoration_begin; i < pModule->decoration_end; i += length_of(pModule->pWords + i)) {
         const uint32_t* pInst = pModule->pWords + i;
         if (opcode_of(pInst) == kOpDecorate && pInst[1] == id && pInst[2] == decoration) {
@@ -112,14 +113,14 @@ static uint32_t find_decoration(const Module* pModule, uint32_t id, uint32_t dec
 }
 
 // The length of an OpTypeArray. It is an OpConstant or OpSpecConstant, for which the default value is used.
-static uint32_t array_length(const Module* pModule, const uint32_t* pArray) {
+static uint32_t array_length(const ReflectModule* pModule, const uint32_t* pArray) {
     const uint32_t* pLength = find_definition(pModule, pArray[3]);
     return pLength != NULL ? pLength[3] : 0;
 }
 
 // Size in bytes of a type in the payload, 0 if it can't be worked out. Matrix layout (MatrixStride, RowMajor) is a
 // decoration on the struct member that holds the matrix, or the array of matrices, so that member is passed along.
-static uint32_t type_size(const Module* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member,
+static uint32_t type_size(const ReflectModule* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member,
                           uint32_t depth) {
     const uint32_t* pInst = find_definition(pModule, type_id);
     if (pInst == NULL || depth > kMaxTypeDepth) {
@@ -170,7 +171,7 @@ static uint32_t type_size(const Module* pModule, uint32_t type_id, uint32_t pare
     }
 }
 
-static bool describe_scalar(const Module* pModule, uint32_t type_id, ShaderAbortReflectMember* pMember) {
+static bool describe_scalar(const ReflectModule* pModule, uint32_t type_id, ShaderAbortReflectMember* pMember) {
     const uint32_t* pInst = find_definition(pModule, type_id);
     if (pInst == NULL) {
         return false;
@@ -187,7 +188,7 @@ static bool describe_scalar(const Module* pModule, uint32_t type_id, ShaderAbort
 }
 
 // |parent_struct| and |member| are where the type is used, for the matrix decorations. 0, 0 if it isn't in a struct.
-static void describe_member(const Module* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member,
+static void describe_member(const ReflectModule* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member,
                             ShaderAbortReflectMember* pMember) {
     memset(pMember, 0, sizeof(*pMember));
     pMember->type_id = type_id;
@@ -243,7 +244,7 @@ static void describe_member(const Module* pModule, uint32_t type_id, uint32_t pa
 
 // Writes the bytes of constant |id| (an array of integers, or one integer of it) to pBytes, up to |capacity|.
 // Returns how many bytes it wrote.
-static size_t read_constant_bytes(const Module* pModule, uint32_t id, uint8_t* pBytes, size_t capacity) {
+static size_t read_constant_bytes(const ReflectModule* pModule, uint32_t id, uint8_t* pBytes, size_t capacity) {
     const uint32_t* pInst = find_definition(pModule, id);
     if (pInst == NULL) {
         return 0;
@@ -286,7 +287,7 @@ static bool looks_like_string(const char* pText, size_t size) {
 }
 
 // Follows OpAbortKHR's Message back to the constant with the format string, and copies the string out
-static char* find_format_string(const Module* pModule, uint32_t message_id) {
+static char* find_format_string(const ReflectModule* pModule, uint32_t message_id) {
     const uint32_t* pInst = find_definition(pModule, message_id);
     while (pInst != NULL && (opcode_of(pInst) == kOpCopyObject || opcode_of(pInst) == kOpCopyLogical)) {
         pInst = find_definition(pModule, pInst[3]);
@@ -330,7 +331,7 @@ static char* find_format_string(const Module* pModule, uint32_t message_id) {
     return pText;
 }
 
-static bool reflect_abort(const Module* pModule, size_t offset, ShaderAbortReflectAbort* pAbort) {
+static bool reflect_abort(const ReflectModule* pModule, size_t offset, ShaderAbortReflectAbort* pAbort) {
     const uint32_t* pInst = pModule->pWords + offset;
     pAbort->instruction_offset = (uint32_t)offset;
     pAbort->message_type_id = pInst[1];
@@ -364,7 +365,7 @@ static bool reflect_abort(const Module* pModule, size_t offset, ShaderAbortRefle
 
 ShaderAbortReflection* shader_abort_reflect_create(const uint32_t* pCode, size_t codeSize) {
     const uint32_t bound = pCode[3];
-    Module module = {pCode, codeSize / 4, (uint32_t*)calloc(bound, sizeof(uint32_t)), 0, 0};
+    ReflectModule module = {pCode, codeSize / 4, (uint32_t*)calloc(bound, sizeof(uint32_t)), 0, 0};
     ShaderAbortReflection* pReflection = (ShaderAbortReflection*)calloc(1, sizeof(ShaderAbortReflection));
     if (module.pIdToOffset == NULL || pReflection == NULL) {
         free(module.pIdToOffset);

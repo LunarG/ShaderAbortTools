@@ -59,12 +59,22 @@ const char* shader_abort_message_text(const ShaderAbortMessage* pMessage);
 size_t shader_abort_format_message(const ShaderAbortMessage* pMessage, char* pOut, size_t outSize);
 
 /**
- * Convenience: formats every message in pMessageData and calls pCallback once for each.
+ * Called by shader_abort_for_each_message() once per message
  *
  * @param pText The null-terminated formatted message, only valid during the callback
- * @return The number of messages found
+ * @param pUserData The pUserData that was given to shader_abort_for_each_message()
  */
 typedef void (*ShaderAbortMessageCallback)(const char* pText, void* pUserData);
+
+/**
+ * Convenience: formats every message in pMessageData and calls pCallback once for each.
+ *
+ * @param pMessageData VkDeviceFaultShaderAbortMessageInfoKHR::pMessageData
+ * @param messageDataSize VkDeviceFaultShaderAbortMessageInfoKHR::messageDataSize (in bytes)
+ * @param pCallback Called with the formatted text of each message
+ * @param pUserData Passed to pCallback as is
+ * @return The number of messages found
+ */
 size_t shader_abort_for_each_message(const void* pMessageData, uint64_t messageDataSize,
                                      ShaderAbortMessageCallback pCallback, void* pUserData);
 

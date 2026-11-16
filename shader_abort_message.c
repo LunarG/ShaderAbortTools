@@ -62,13 +62,13 @@ const char* shader_abort_message_text(const ShaderAbortMessage* pMessage) {
 }
 
 // snprintf() style output, the length is always counted even when the buffer is full
-typedef struct Writer {
+typedef struct MessageWriter {
     char* pOut;
     size_t capacity;
     size_t length;
-} Writer;
+} MessageWriter;
 
-static void writer_append(Writer* pWriter, const char* pText, size_t count) {
+static void writer_append(MessageWriter* pWriter, const char* pText, size_t count) {
     if (pWriter->pOut != NULL && pWriter->length < pWriter->capacity) {
         size_t space = pWriter->capacity - pWriter->length;
         size_t copy = count < space ? count : space;
@@ -78,16 +78,16 @@ static void writer_append(Writer* pWriter, const char* pText, size_t count) {
 }
 
 // Reads the arguments that follow the format string in the payload
-typedef struct ArgReader {
+typedef struct MessageArgReader {
     const uint8_t* pPayload;
     uint64_t size;
     uint64_t offset;
-} ArgReader;
+} MessageArgReader;
 
 // Reads one 1, 2, 4 or 8 byte scalar, aligned to its own size (scalar layout).
 // The bits are returned zero-extended.
 // Returns false if it doesn't fit in the payload.
-static bool read_scalar(ArgReader* pReader, uint64_t size, uint64_t* pBits) {
+static bool read_scalar(MessageArgReader* pReader, uint64_t size, uint64_t* pBits) {
     uint64_t offset = align_up(pReader->offset, size);
     if (offset > pReader->size || pReader->size - offset < size) {
         return false;
@@ -138,14 +138,14 @@ static float half_to_float(uint16_t half) {
 }
 
 // One parsed "%[flags][width][.precision][vN][hh|h|l|ll|ul]conversion"
-typedef struct Specifier {
+typedef struct MessageSpecifier {
     char flags[6];    // the subset of "-+ #0" that was used, each once, null-terminated
     int width;        // 0 if not given
     int precision;    // -1 if not given
     int components;   // 1, or 2 to 4 for "%v3f" style vectors
     uint64_t size;    // bytes of each argument: 1 (hh), 2 (h), 4, or 8 (l, ll, ul, p)
     char conversion;  // one of kConversions, or something else if this isn't a specifier we know
-} Specifier;
+} MessageSpecifier;
 
 static const char kConversions[] = "diuxXoeEfFgGaAp";
 
@@ -168,7 +168,7 @@ static const char* parse_number(const char* p, int* pValue) {
 // |p| points at the character after the '%'.
 // Relies on the string being null-terminated, the parsing stops there.
 // Returns where the specifier ends.
-static const char* parse_specifier(const char* p, Specifier* pSpec) {
+static const char* parse_specifier(const char* p, MessageSpecifier* pSpec) {
     memset(pSpec, 0, sizeof(*pSpec));
     pSpec->precision = -1;
     pSpec->components = 1;
@@ -211,13 +211,16 @@ static const char* parse_specifier(const char* p, Specifier* pSpec) {
 // Builds the snprintf() format for |pSpec|.
 // Width and precision are passed as "*" arguments, so the shader's own text never goes into the format
 // and only flags that are well defined for the conversion are kept.
-static void make_printf_format(const Specifier* pSpec, const char* pLengthModifier, char conversion, char* pOut,
+static void make_printf_format(const MessageSpecifier* pSpec, const char* pLengthModifier, char conversion, char* pOut,
                                size_t outSize) {
     char flags[sizeof(pSpec->flags)] = {0};
     size_t count = 0;
     for (const char* f = pSpec->flags; *f != '\0'; ++f) {
         if (*f == '#' && strchr("diu", conversion) != NULL) {
             continue;  // '#' with d, i or u is undefined behavior in C
+        }
+        if ((*f == '+' || *f == ' ') && strchr("uxXo", conversion) != NULL) {
+            continue;  // a sign only means something for a signed conversion, and not every C library ignores it
         }
         flags[count++] = *f;
     }
@@ -226,7 +229,7 @@ static void make_printf_format(const Specifier* pSpec, const char* pLengthModifi
 
 // Reads one argument (a single scalar) and appends it as text.
 // Returns false if the payload ran out of data.
-static bool format_scalar(const Specifier* pSpec, ArgReader* pReader, Writer* pWriter) {
+static bool format_scalar(const MessageSpecifier* pSpec, MessageArgReader* pReader, MessageWriter* pWriter) {
     uint64_t bits = 0;
     if (!read_scalar(pReader, pSpec->size, &bits)) {
         return false;
@@ -273,13 +276,13 @@ static bool format_scalar(const Specifier* pSpec, ArgReader* pReader, Writer* pW
 
 // Handles one "%..." specifier. |pFormat| points at the character after the '%'.
 // Returns where to continue reading the format string from.
-static const char* format_specifier(const char* pFormat, ArgReader* pReader, Writer* pWriter) {
+static const char* format_specifier(const char* pFormat, MessageArgReader* pReader, MessageWriter* pWriter) {
     if (*pFormat == '%') {
         writer_append(pWriter, "%", 1);
         return pFormat + 1;
     }
 
-    Specifier spec;
+    MessageSpecifier spec;
     const char* pEnd = parse_specifier(pFormat, &spec);
 
     const bool is_float = spec.conversion != '\0' && strchr("eEfFgGaA", spec.conversion) != NULL;
@@ -305,7 +308,7 @@ static const char* format_specifier(const char* pFormat, ArgReader* pReader, Wri
 }
 
 size_t shader_abort_format_message(const ShaderAbortMessage* pMessage, char* pOut, size_t outSize) {
-    Writer writer = {pOut, outSize > 0 ? outSize - 1 : 0, 0};  // always leave room for the null terminator
+    MessageWriter writer = {pOut, outSize > 0 ? outSize - 1 : 0, 0};  // always leave room for the null terminator
 
     if (pMessage != NULL && pMessage->pPayload != NULL) {
         const char* pFormat = (const char*)pMessage->pPayload;
@@ -322,7 +325,7 @@ size_t shader_abort_format_message(const ShaderAbortMessage* pMessage, char* pOu
             writer_append(&writer, pFormat, format_length);
         } else {
             // The arguments start after the string, padded to 4 bytes
-            ArgReader reader = {pMessage->pPayload, pMessage->size, align_up(format_length + 1, 4)};
+            MessageArgReader reader = {pMessage->pPayload, pMessage->size, align_up(format_length + 1, 4)};
 
             const char* pEnd = pFormat + format_length;
             const char* p = pFormat;

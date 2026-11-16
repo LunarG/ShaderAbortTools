@@ -22,31 +22,34 @@ Here are the various tools:
 
 # Stripping abort from a shader
 
-[shader_abort_strip.md](shader_abort_strip.h) removes everything from `SPV_KHR_abort` so you can ship 1 shader with your application
+[shader_abort_strip.h](shader_abort_strip.h) removes everything from `SPV_KHR_abort` so you can ship 1 shader with your application
 
 it provides a simple `has_shader_abort()` and `strip_abort_extensions()` helper
 
 > There is also a standalone tool, see `sample/strip.c`
 
 ```c
-if (device_support_shader_abort) {
-  return;
-}
-
-// designed to match VkShaderModuleCreateInfo
+// VkShaderModuleCreateInfo is what you were going to pass to vkCreateShaderModule()
 VkShaderModuleCreateInfo module_ci = GetYourShader();
 
-if (has_shader_abort(module_ci.pCode, module_ci.codeSize)) {
-    // The size of the new binary might be smaller, but we trust you to just manage the allocation
-    uint32_t* out_pCode = (uint32_t*)malloc(module_ci.codeSize);
-    size_t out_codeSize = 0;
-    int result = strip_abort_extensions(module_ci.pCode, module_ci.codeSize, out_pCode, &out_codeSize);
+bool need_strip = !device_supports_shader_abort && has_shader_abort(module_ci.pCode, module_ci.codeSize);
 
+uint32_t* pStripped = NULL;
+if (need_strip) {
+    // The output is never bigger than the input, so codeSize is always enough
+    pStripped = (uint32_t*)malloc(module_ci.codeSize);
+    size_t stripped_size = 0;
+    int result = pStripped ? strip_abort_extensions(module_ci.pCode, module_ci.codeSize, pStripped, &stripped_size) : -1;
     if (result == 0) {
-        // stripped
-        module_ci.pCode = out_pCode;
-        module_ci.codeSize = out_codeSize;
-    }
+        module_ci.pCode = pStripped;
+        module_ci.codeSize = stripped_size;
+    }  // else out of memory, or the module is malformed
+}
+
+vkCreateShaderModule(device, &module_ci, NULL, &shader_module);
+
+if (need_strip) {
+    free(pStripped);
 }
 ```
 
@@ -56,7 +59,7 @@ if (has_shader_abort(module_ci.pCode, module_ci.codeSize)) {
 
 # Reading the abort messages
 
-[shader_abort_message.md](shader_abort_message.h) is the other half of `VK_KHR_shader_abort`. After a shader aborts the
+[shader_abort_message.h](shader_abort_message.h) is the other half of `VK_KHR_shader_abort`. After a shader aborts the
 device is lost, and `vkGetDeviceFaultDebugInfoKHR` gives you the raw message data.
 
 There are two parts to this:
@@ -141,7 +144,7 @@ See [Appendix: format specifiers](#appendix-format-specifiers) for what a messag
 
 # Reflecting the aborts in a shader
 
-[shader_abort_reflect.md](shader_abort_reflect.h) reads a SPIR-V module and reports, for every `OpAbortKHR`:
+[shader_abort_reflect.h](shader_abort_reflect.h) reads a SPIR-V module and reports, for every `OpAbortKHR`:
 
 * the format string, if it is a constant (it is with glslang and Slang)
 * every member of the message, with its **byte offset in the payload**, its size, and its type

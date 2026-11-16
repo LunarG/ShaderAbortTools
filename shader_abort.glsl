@@ -25,6 +25,9 @@
 // GLSL macros can't take a variable number of arguments, hence one macro per count. They can't join strings either, so
 // only SHADER_ASSERT_LINE and SHADER_ASSERT_BOUNDS, which write their own message, can include the line number.
 //
+// Include it before any declarations - GLSL only allows #extension ahead of the first non-preprocessor token
+// and this file turns on GL_EXT_abort.
+//
 // To remove them, compile with -DSHADER_ABORT_DISABLE: every macro becomes empty and GL_EXT_abort isn't used. The
 // condition isn't evaluated then, so don't put side effects in it.
 
