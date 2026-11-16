@@ -4,16 +4,29 @@
 #include "shader_abort_strip.h"
 #include <string.h>
 
+// From spirv.h
+enum {
+    kOpExtension = 10,
+    kOpCapability = 17,
+    kOpConstantNull = 46,
+    kOpDecorate = 71,
+    kOpMemberDecorate = 72,
+    kOpUnreachable = 255,
+    kOpDecorateId = 332,
+    kOpAbortKHR = 5121,
+    kOpConstantDataKHR = 5147,
+    kOpSpecConstantDataKHR = 5148,
+    kOpDecorateString = 5632,        // OpDecorateStringGOOGLE
+    kOpMemberDecorateString = 5633,  // OpMemberDecorateStringGOOGLE
+    kCapabilityAbortKHR = 5120,
+    kCapabilityConstantDataKHR = 5146,
+    kDecorationSpecId = 1,
+    kDecorationUTFEncodedKHR = 5145,
+};
+
 // Returns the word offset (from the start of the instruction) of the Decoration operand for every
 // instruction that decorates something, or 0 if |opcode| is not a decorate instruction.
 static size_t decoration_operand_offset(uint32_t opcode) {
-    // From spirv.h
-    const uint32_t kOpDecorate = 71;
-    const uint32_t kOpMemberDecorate = 72;
-    const uint32_t kOpDecorateId = 332;
-    const uint32_t kOpDecorateString = 5632;        // OpDecorateStringGOOGLE
-    const uint32_t kOpMemberDecorateString = 5633;  // OpMemberDecorateStringGOOGLE
-
     if (opcode == kOpDecorate || opcode == kOpDecorateId || opcode == kOpDecorateString) {
         return 2;  // OpDecorate <target> <decoration> ...
     }
@@ -26,8 +39,6 @@ static size_t decoration_operand_offset(uint32_t opcode) {
 // Returns true if |id| is the Result <id> of an OpSpecConstantDataKHR. Those get turned into plain
 // OpConstantNull, so a SpecId decoration pointing at them would no longer be legal.
 static bool is_spec_constant_data_id(const uint32_t* spirv, size_t word_count, uint32_t id) {
-    const uint32_t kOpSpecConstantDataKHR = 5148;
-
     size_t offset = 5;  // skip the SPIR-V header
     while (offset < word_count) {
         uint32_t opcode = spirv[offset] & 0xFFFF;
@@ -44,10 +55,6 @@ static bool is_spec_constant_data_id(const uint32_t* spirv, size_t word_count, u
 }
 
 bool has_shader_abort(const uint32_t* pCode, size_t codeSize) {
-    // From spirv.h
-    const uint32_t kOpCapability = 17;
-    const uint32_t kCapabilityAbortKHR = 5120;
-
     // Only loop through the capabilities at the very start of the file
     size_t word_count = codeSize / 4;
     size_t in_offset = 5;
@@ -72,20 +79,6 @@ bool has_shader_abort(const uint32_t* pCode, size_t codeSize) {
 }
 
 int strip_abort_extensions(const uint32_t* pCode, size_t codeSize, uint32_t* out_pCode, size_t* out_codeSize) {
-    // From spirv.h
-    const uint32_t kOpCapability = 17;
-    const uint32_t kOpExtension = 10;
-    const uint32_t kOpConstantNull = 46;
-    const uint32_t kOpUnreachable = 255;
-    const uint32_t kCapabilityAbortKHR = 5120;
-    const uint32_t kCapabilityConstantDataKHR = 5146;
-    const uint32_t kOpAbortKHR = 5121;
-    const uint32_t kOpDecorate = 71;
-    const uint32_t kDecorationSpecId = 1;
-    const uint32_t kDecorationUTFEncodedKHR = 5145;
-    const uint32_t kOpConstantDataKHR = 5147;
-    const uint32_t kOpSpecConstantDataKHR = 5148;
-
     // classic "pass in as bytes" but need as dword count
     const size_t word_count = codeSize / 4;
 
