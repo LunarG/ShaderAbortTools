@@ -41,6 +41,11 @@ typedef struct Module {
     const uint32_t* pWords;
     size_t word_count;
     uint32_t* pIdToOffset;  // word offset of the instruction that defines an <id>, 0 if it isn't one this file needs
+    // Word range holding every OpDecorate / OpMemberDecorate
+    // so looking one up doesn't scan the whole module.
+    // Both 0 if there are none.
+    size_t decoration_begin;
+    size_t decoration_end;
 } Module;
 
 static uint32_t opcode_of(const uint32_t* pInst) { return pInst[0] & 0xFFFF; }
@@ -81,7 +86,7 @@ static const uint32_t* find_definition(const Module* pModule, uint32_t id) {
 // RowMajor has no literal, check it with has_member_decoration().
 static uint32_t find_member_decoration(const Module* pModule, uint32_t struct_id, uint32_t member, uint32_t decoration,
                                        uint32_t fallback) {
-    for (size_t i = 5; i < pModule->word_count; i += length_of(pModule->pWords + i)) {
+    for (size_t i = pModule->decoration_begin; i < pModule->decoration_end; i += length_of(pModule->pWords + i)) {
         const uint32_t* pInst = pModule->pWords + i;
         if (opcode_of(pInst) == kOpMemberDecorate && pInst[1] == struct_id && pInst[2] == member &&
             pInst[3] == decoration) {
@@ -97,7 +102,7 @@ static bool has_member_decoration(const Module* pModule, uint32_t struct_id, uin
 
 // The first literal of an OpDecorate, or |fallback|. For a decoration with no literal, returns 1 if it is there.
 static uint32_t find_decoration(const Module* pModule, uint32_t id, uint32_t decoration, uint32_t fallback) {
-    for (size_t i = 5; i < pModule->word_count; i += length_of(pModule->pWords + i)) {
+    for (size_t i = pModule->decoration_begin; i < pModule->decoration_end; i += length_of(pModule->pWords + i)) {
         const uint32_t* pInst = pModule->pWords + i;
         if (opcode_of(pInst) == kOpDecorate && pInst[1] == id && pInst[2] == decoration) {
             return length_of(pInst) > 3 ? pInst[3] : 1;
@@ -359,7 +364,7 @@ static bool reflect_abort(const Module* pModule, size_t offset, ShaderAbortRefle
 
 ShaderAbortReflection* shader_abort_reflect_create(const uint32_t* pCode, size_t codeSize) {
     const uint32_t bound = pCode[3];
-    Module module = {pCode, codeSize / 4, (uint32_t*)calloc(bound, sizeof(uint32_t))};
+    Module module = {pCode, codeSize / 4, (uint32_t*)calloc(bound, sizeof(uint32_t)), 0, 0};
     ShaderAbortReflection* pReflection = (ShaderAbortReflection*)calloc(1, sizeof(ShaderAbortReflection));
     if (module.pIdToOffset == NULL || pReflection == NULL) {
         free(module.pIdToOffset);
@@ -367,14 +372,19 @@ ShaderAbortReflection* shader_abort_reflect_create(const uint32_t* pCode, size_t
         return NULL;
     }
 
-    // Pass 1: remember where the <id>s this file needs are defined, and count the aborts
+    // Pass 1: remember where the <id>s this file needs are defined, where the decorations are, and count the aborts
     uint32_t abort_count = 0;
     for (size_t i = 5; i < module.word_count; i += length_of(pCode + i)) {
         const uint32_t result_operand = result_id_operand(opcode_of(pCode + i));
         if (result_operand != 0) {
             module.pIdToOffset[pCode[i + result_operand]] = (uint32_t)i;
         }
-        if (opcode_of(pCode + i) == kOpAbortKHR) {
+        const uint32_t opcode = opcode_of(pCode + i);
+        if (opcode == kOpDecorate || opcode == kOpMemberDecorate) {
+            module.decoration_begin = module.decoration_begin != 0 ? module.decoration_begin : i;
+            module.decoration_end = i + length_of(pCode + i);
+        }
+        if (opcode == kOpAbortKHR) {
             abort_count++;
         }
     }
