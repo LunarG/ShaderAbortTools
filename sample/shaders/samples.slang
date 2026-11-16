@@ -20,7 +20,6 @@ static const uint SAMPLE_TYPES = 2;
 static const uint SAMPLE_MULTIPLE = 3;
 static const uint SAMPLE_EACH = 4;
 static const uint SAMPLE_ASSERT = 5;
-static const uint SAMPLE_STRIP = 6;
 
 [shader("compute")]
 [numthreads(64, 1, 1)]
@@ -56,9 +55,5 @@ void main(uint invocation : SV_GroupIndex)
         // The macros from shader_abort.slang.
         SHADER_ASSERT_BOUNDS(pc.index, pc.count);
         SHADER_ASSERT(pc.value >= 0.0, "value must not be negative, it was %f", pc.value);
-
-    } else if (pc.sample_id == SAMPLE_STRIP) {
-        // Does nothing.
-        // The 'strip' sample runs this after stripping the aborts out of the shader.
     }
 }

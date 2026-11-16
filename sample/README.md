@@ -20,7 +20,6 @@ cmake --build build
 # other samples
 ./build/sample format
 ./build/sample types --lang slang
-./build/sample reflect
 
 ./build/sample --help
 ```
@@ -38,8 +37,18 @@ Needs Vulkan headers with `VK_KHR_shader_abort` (Vulkan SDK 1.4.357.0 or newer),
 | `multiple` | 4 invocations abort. Prints every message the device reports, which may be just one |
 | `each` | The `multiple` shader, read with `shader_abort_for_each_message()`: one call and a callback, no loop |
 | `assert` | The `SHADER_ASSERT` macros. Every invocation fails the same assert, so repeated messages are counted instead of printed |
-| `strip` | Strips the aborts out of the shader with `shader_abort_strip.c` and runs it on a device created without any of the abort extensions. The shader runs a case that does nothing, because a stripped abort is undefined behavior if it is reached |
-| `reflect` | Prints every abort in the shader and where its message values are, from the SPIR-V (`shader_abort_reflect.c`). Doesn't use the GPU |
+
+## Standalone tools
+
+`strip` and `reflect` are small wrappers around `shader_abort_strip.c` and `shader_abort_reflect.c` that work on any SPIR-V file (not GPU needed).
+
+```bash
+# removes the aborts, out.spv defaults to stripped.spv
+./build/strip shader.spv [out.spv]
+
+# prints every abort and where its message values are
+./build/reflect shader.spv
+```
 
 ## Changing the shaders
 

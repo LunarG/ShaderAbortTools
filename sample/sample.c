@@ -9,8 +9,6 @@
 #include <vulkan/vulkan.h>
 
 #include "shader_abort_message.h"
-#include "shader_abort_reflect.h"
-#include "shader_abort_strip.h"
 #include "util.h"
 
 typedef enum Sample {
@@ -20,8 +18,6 @@ typedef enum Sample {
     SAMPLE_MULTIPLE = 3,
     SAMPLE_EACH = 4,
     SAMPLE_ASSERT = 5,
-    SAMPLE_STRIP = 6,
-    SAMPLE_REFLECT = 7,
 } Sample;
 
 static const SampleInfo kSamples[] = {
@@ -31,8 +27,6 @@ static const SampleInfo kSamples[] = {
     {"multiple", "4 invocations abort, prints every message the device reports"},
     {"each", "the 'multiple' shader, read with shader_abort_for_each_message()"},
     {"assert", "the SHADER_ASSERT macros from shader_abort.glsl / .slang"},
-    {"strip", "strip the aborts out of the shader, then run it on a device without VK_KHR_shader_abort"},
-    {"reflect", "print where every abort's message values are, from the SPIR-V, without using the GPU"},
 };
 static const size_t kSampleCount = sizeof(kSamples) / sizeof(kSamples[0]);
 
@@ -173,11 +167,8 @@ static int run_sample(const Options* pOptions, const uint32_t* pCode, size_t cod
     device_ci.pNext = &enable.features2;  // the features from enable_features()
     device_ci.queueCreateInfoCount = 1;
     device_ci.pQueueCreateInfos = &queue_ci;
-    if (!pOptions->strip) {
-        // Stripping, so don't need any of the extensions now
-        device_ci.enabledExtensionCount = (uint32_t)(sizeof(kDeviceExtensions) / sizeof(kDeviceExtensions[0]));
-        device_ci.ppEnabledExtensionNames = kDeviceExtensions;
-    }
+    device_ci.enabledExtensionCount = (uint32_t)(sizeof(kDeviceExtensions) / sizeof(kDeviceExtensions[0]));
+    device_ci.ppEnabledExtensionNames = kDeviceExtensions;
     VkDevice device;
     VK_CHECK(vkCreateDevice(gpu, &device_ci, NULL, &device));
     VkQueue queue;
@@ -258,7 +249,7 @@ static int run_sample(const Options* pOptions, const uint32_t* pCode, size_t cod
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cb;
 
-    printf("about to call vkQueueSubmit: device lost is %sexpected...\n", pOptions->strip ? "not " : "");
+    printf("about to call vkQueueSubmit: device lost is expected...\n");
 
     // After an abort, any call can be the one that returns VK_ERROR_DEVICE_LOST
     VkResult result = vkQueueSubmit(queue, 1, &submit, fence);
@@ -299,39 +290,10 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    options.reflect = options.sample == SAMPLE_REFLECT;
-    options.strip = options.sample == SAMPLE_STRIP;
-
     size_t code_size = 0;
     uint32_t* pCode = load_spirv(&options, &code_size);
 
-    // shader_abort_strip.h
-    if (options.strip && has_shader_abort(pCode, code_size)) {
-        // What an application does when the device doesn't support VK_KHR_shader_abort (shader_abort_strip.h).
-        // The output is never bigger than the input.
-        uint32_t* pStripped = (uint32_t*)malloc(code_size);
-        size_t stripped_size = 0;
-        if (pStripped == NULL || strip_abort_extensions(pCode, code_size, pStripped, &stripped_size) != 0) {
-            fprintf(stderr, "failed to strip the shader\n");
-            return 1;
-        }
-        printf("stripped the aborts out of the shader (%zu bytes -> %zu bytes)\n", code_size, stripped_size);
-        free(pCode);
-        pCode = pStripped;
-        code_size = stripped_size;
-    }
-
-    int exit_code = 0;
-    if (options.reflect) {
-        // shader_abort_reflect.h
-        //
-        // shader_abort_reflect_print() is the built in "printf" of the reflection. To print it your own way, or use the
-        // offsets in a tool, call shader_abort_reflect_create() and walk pAborts/pMembers, the same way it does.
-        exit_code = shader_abort_reflect_print(pCode, code_size);
-    } else {
-        exit_code = run_sample(&options, pCode, code_size);
-    }
-
+    const int exit_code = run_sample(&options, pCode, code_size);
     free(pCode);
     return exit_code;
 }

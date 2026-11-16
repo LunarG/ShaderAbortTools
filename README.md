@@ -26,6 +26,8 @@ Here are the various tools:
 
 it provides a simple `has_shader_abort()` and `strip_abort_extensions()` helper
 
+> There is also a standalone tool, see `sample/strip.c`
+
 ```c
 if (device_support_shader_abort) {
   return;
@@ -160,6 +162,8 @@ for (uint32_t a = 0; pReflection && a < pReflection->abort_count; ++a) {
 }
 shader_abort_reflect_destroy(pReflection);
 ```
+
+> There is also a standalone tool, see `sample/reflect.c`
 
 Example of the output:
 

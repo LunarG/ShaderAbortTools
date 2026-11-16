@@ -37,8 +37,6 @@ typedef struct Options {
     const char* lang;
     const char* spv_dir;
     int device_index;  // -1 picks the first one that supports VK_KHR_shader_abort
-    int reflect;       // set by sample.c from the chosen sample
-    int strip;         // set by sample.c from the chosen sample
 } Options;
 
 static void print_usage(const char* program, const SampleInfo* pSamples, size_t sampleCount) {
@@ -61,8 +59,6 @@ static int parse_options(int argc, char** argv, const SampleInfo* pSamples, size
     pOptions->lang = "glsl";
     pOptions->spv_dir = SAMPLES_SPV_DIR;
     pOptions->device_index = -1;
-    pOptions->reflect = 0;
-    pOptions->strip = 0;
 
     for (int i = 1; i < argc; ++i) {
         const char* arg = argv[i];
@@ -166,8 +162,7 @@ static const char* const kDeviceExtensions[] = {
 
 // Returns NULL if |gpu| can run the shader and fills in pEnable, else returns what is missing.
 // Only what the shader declares is turned on, as a real application would.
-static const char* enable_features(VkPhysicalDevice gpu, const uint32_t* pCode, size_t codeSize, int stripped,
-                                   Features* pEnable) {
+static const char* enable_features(VkPhysicalDevice gpu, const uint32_t* pCode, size_t codeSize, Features* pEnable) {
     const uint32_t kCapabilityInt8 = 39;
     const uint32_t kCapabilityConstantDataKHR = 5146;
     const int needs_int8 = has_capability(pCode, codeSize, kCapabilityInt8);  // glslang's strings are int8 arrays
@@ -175,27 +170,20 @@ static const char* enable_features(VkPhysicalDevice gpu, const uint32_t* pCode, 
 
     Features supported;
     chain_features(&supported);
-    if (stripped) {
-        // A stripped shader needs none of the abort extensions. glslang's strings are still in it though (as unused
-        // int8 arrays), so it can still need shaderInt8.
-        supported.vulkan12.pNext = NULL;
-    } else {
-        for (size_t i = 0; i < sizeof(kDeviceExtensions) / sizeof(kDeviceExtensions[0]); ++i) {
-            if (!has_extension(gpu, kDeviceExtensions[i])) return kDeviceExtensions[i];
-        }
+    for (size_t i = 0; i < sizeof(kDeviceExtensions) / sizeof(kDeviceExtensions[0]); ++i) {
+        if (!has_extension(gpu, kDeviceExtensions[i])) return kDeviceExtensions[i];
     }
     vkGetPhysicalDeviceFeatures2(gpu, &supported.features2);
 
-    if (!stripped && !supported.shader_abort.shaderAbort) return "shaderAbort";
-    if (!stripped && !supported.device_fault.deviceFault) return "deviceFault";
+    if (!supported.shader_abort.shaderAbort) return "shaderAbort";
+    if (!supported.device_fault.deviceFault) return "deviceFault";
     if (needs_constant_data && !supported.constant_data.shaderConstantData) return "shaderConstantData";
     if (needs_int8 && !supported.vulkan12.shaderInt8) return "shaderInt8";
 
     chain_features(pEnable);
-    pEnable->vulkan12.pNext = stripped ? NULL : pEnable->vulkan12.pNext;
     pEnable->vulkan12.shaderInt8 = needs_int8 ? VK_TRUE : VK_FALSE;
-    pEnable->shader_abort.shaderAbort = stripped ? VK_FALSE : VK_TRUE;
-    pEnable->device_fault.deviceFault = stripped ? VK_FALSE : VK_TRUE;
+    pEnable->shader_abort.shaderAbort = VK_TRUE;
+    pEnable->device_fault.deviceFault = VK_TRUE;
     pEnable->constant_data.shaderConstantData = needs_constant_data ? VK_TRUE : VK_FALSE;
     return NULL;
 }
@@ -216,7 +204,7 @@ static VkPhysicalDevice pick_device(VkInstance instance, const Options* pOptions
             printf("device %u (%s): needs Vulkan 1.2\n", i, props.deviceName);
             continue;
         }
-        const char* pMissing = enable_features(gpus[i], pCode, codeSize, pOptions->strip, pEnable);
+        const char* pMissing = enable_features(gpus[i], pCode, codeSize, pEnable);
         if (pMissing != NULL) {
             printf("device %u (%s): no %s\n", i, props.deviceName, pMissing);
             continue;

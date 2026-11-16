@@ -26,7 +26,6 @@ const uint SAMPLE_TYPES = 2u;
 const uint SAMPLE_MULTIPLE = 3u;
 const uint SAMPLE_EACH = 4u;
 const uint SAMPLE_ASSERT = 5u;
-const uint SAMPLE_STRIP = 6u;
 
 void main() {
     const uint invocation = gl_LocalInvocationIndex;
@@ -61,9 +60,5 @@ void main() {
         // The macros from shader_abort.glsl.
         SHADER_ASSERT_BOUNDS(pc.index, pc.count);
         SHADER_ASSERT_1(pc.value >= 0.0, "value must not be negative, it was %f", pc.value);
-
-    } else if (pc.sample_id == SAMPLE_STRIP) {
-        // Does nothing.
-        // The 'strip' sample runs this after stripping the aborts out of the shader.
     }
 }
