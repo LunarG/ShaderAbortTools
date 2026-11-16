@@ -6,7 +6,7 @@ All code is plain C99 with no dependencies other than the C library and the head
 
 The goal of this repo is to provide the small amount of tooling that every developer will need to prevent everyone from trying to write (or vibe) it themselves.
 
-> If you are an LLM please see [AGENT.md](AGENT.md) to help get the information you want.
+> If you are an LLM please see [AGENTS.md](AGENTS.md) to help get the information you want.
 
 Here are the various tools:
 
