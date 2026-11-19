@@ -84,20 +84,18 @@ static const uint32_t* find_definition(const ReflectModule* pModule, uint32_t id
 
 // The first literal of an OpMemberDecorate, or |fallback| if the member doesn't have that decoration.
 // RowMajor has no literal, check it with has_member_decoration().
-static uint32_t find_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member,
-                                       uint32_t decoration, uint32_t fallback) {
+static uint32_t find_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member, uint32_t decoration,
+                                       uint32_t fallback) {
     for (size_t i = pModule->decoration_begin; i < pModule->decoration_end; i += length_of(pModule->pWords + i)) {
         const uint32_t* pInst = pModule->pWords + i;
-        if (opcode_of(pInst) == kOpMemberDecorate && pInst[1] == struct_id && pInst[2] == member &&
-            pInst[3] == decoration) {
+        if (opcode_of(pInst) == kOpMemberDecorate && pInst[1] == struct_id && pInst[2] == member && pInst[3] == decoration) {
             return length_of(pInst) > 4 ? pInst[4] : 1;
         }
     }
     return fallback;
 }
 
-static bool has_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member,
-                                  uint32_t decoration) {
+static bool has_member_decoration(const ReflectModule* pModule, uint32_t struct_id, uint32_t member, uint32_t decoration) {
     return find_member_decoration(pModule, struct_id, member, decoration, 0) != 0;
 }
 
@@ -120,8 +118,7 @@ static uint32_t array_length(const ReflectModule* pModule, const uint32_t* pArra
 
 // Size in bytes of a type in the payload, 0 if it can't be worked out. Matrix layout (MatrixStride, RowMajor) is a
 // decoration on the struct member that holds the matrix, or the array of matrices, so that member is passed along.
-static uint32_t type_size(const ReflectModule* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member,
-                          uint32_t depth) {
+static uint32_t type_size(const ReflectModule* pModule, uint32_t type_id, uint32_t parent_struct, uint32_t member, uint32_t depth) {
     const uint32_t* pInst = find_definition(pModule, type_id);
     if (pInst == NULL || depth > kMaxTypeDepth) {
         return 0;
@@ -144,8 +141,7 @@ static uint32_t type_size(const ReflectModule* pModule, uint32_t type_id, uint32
             const bool row_major = has_member_decoration(pModule, parent_struct, member, kDecorationRowMajor);
             const uint32_t vectors = row_major ? rows : columns;
             const uint32_t tight = (row_major ? columns : rows) * component;
-            const uint32_t stride =
-                find_member_decoration(pModule, parent_struct, member, kDecorationMatrixStride, tight);
+            const uint32_t stride = find_member_decoration(pModule, parent_struct, member, kDecorationMatrixStride, tight);
             return vectors * stride;
         }
         case kOpTypeArray: {
@@ -435,16 +431,15 @@ static void type_name(const ShaderAbortReflectMember* pMember, char* pOut, size_
             snprintf(pOut, outSize, "%s%u vector of %u", scalar, pMember->bit_width, pMember->count);
             break;
         case SHADER_ABORT_REFLECT_KIND_MATRIX:
-            snprintf(pOut, outSize, "%s%u matrix %ux%u%s stride %u", scalar, pMember->bit_width, pMember->count,
-                     pMember->rows, pMember->row_major ? " row-major" : "", pMember->matrix_stride);
+            snprintf(pOut, outSize, "%s%u matrix %ux%u%s stride %u", scalar, pMember->bit_width, pMember->count, pMember->rows,
+                     pMember->row_major ? " row-major" : "", pMember->matrix_stride);
             break;
         case SHADER_ABORT_REFLECT_KIND_ARRAY:
             if (pMember->element_type_id != 0) {
                 snprintf(pOut, outSize, "(type %%%u)[%u] stride %u", pMember->element_type_id, pMember->count,
                          pMember->array_stride);
             } else if (pMember->array_stride != pMember->bit_width / 8) {
-                snprintf(pOut, outSize, "%s%u[%u] stride %u", scalar, pMember->bit_width, pMember->count,
-                         pMember->array_stride);
+                snprintf(pOut, outSize, "%s%u[%u] stride %u", scalar, pMember->bit_width, pMember->count, pMember->array_stride);
             } else {
                 snprintf(pOut, outSize, "%s%u[%u]", scalar, pMember->bit_width, pMember->count);
             }

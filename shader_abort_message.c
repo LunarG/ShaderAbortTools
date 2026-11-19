@@ -348,8 +348,8 @@ size_t shader_abort_format_message(const ShaderAbortMessage* pMessage, char* pOu
     return total;
 }
 
-size_t shader_abort_for_each_message(const void* pMessageData, uint64_t messageDataSize,
-                                     ShaderAbortMessageCallback pCallback, void* pUserData) {
+size_t shader_abort_for_each_message(const void* pMessageData, uint64_t messageDataSize, ShaderAbortMessageCallback pCallback,
+                                     void* pUserData) {
     size_t count = 0;
     uint64_t offset = 0;
     ShaderAbortMessage message;

@@ -188,8 +188,8 @@ static const char* enable_features(VkPhysicalDevice gpu, const uint32_t* pCode, 
     return NULL;
 }
 
-static VkPhysicalDevice pick_device(VkInstance instance, const Options* pOptions, const uint32_t* pCode,
-                                    size_t codeSize, Features* pEnable) {
+static VkPhysicalDevice pick_device(VkInstance instance, const Options* pOptions, const uint32_t* pCode, size_t codeSize,
+                                    Features* pEnable) {
     uint32_t count = 0;
     VK_CHECK(vkEnumeratePhysicalDevices(instance, &count, NULL));
     VkPhysicalDevice gpus[16];

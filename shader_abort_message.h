@@ -29,8 +29,7 @@ typedef struct ShaderAbortMessage {
  * @param pMessage Filled in with the next message
  * @return true if a message was returned
  */
-bool shader_abort_next_message(const void* pMessageData, uint64_t messageDataSize, uint64_t* pOffset,
-                               ShaderAbortMessage* pMessage);
+bool shader_abort_next_message(const void* pMessageData, uint64_t messageDataSize, uint64_t* pOffset, ShaderAbortMessage* pMessage);
 
 /**
  * The first message in pMessageData, same as shader_abort_next_message() with offset of zero
@@ -75,8 +74,8 @@ typedef void (*ShaderAbortMessageCallback)(const char* pText, void* pUserData);
  * @param pUserData Passed to pCallback as is
  * @return The number of messages found
  */
-size_t shader_abort_for_each_message(const void* pMessageData, uint64_t messageDataSize,
-                                     ShaderAbortMessageCallback pCallback, void* pUserData);
+size_t shader_abort_for_each_message(const void* pMessageData, uint64_t messageDataSize, ShaderAbortMessageCallback pCallback,
+                                     void* pUserData);
 
 #ifdef __cplusplus
 }

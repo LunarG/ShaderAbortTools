@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com
 // SPDX-License-Identifier: MIT
 
+#include <inttypes.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -44,10 +45,8 @@ static void print_messages(VkDevice device, Sample sample, uint64_t max_message_
     PFN_vkGetDeviceFaultDebugInfoKHR pfnGetDeviceFaultDebugInfoKHR =
         (PFN_vkGetDeviceFaultDebugInfoKHR)vkGetDeviceProcAddr(device, "vkGetDeviceFaultDebugInfoKHR");
 
-    VkDeviceFaultShaderAbortMessageInfoKHR abort_info = {
-        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_SHADER_ABORT_MESSAGE_INFO_KHR};
-    VkDeviceFaultDebugInfoKHR debug_info = {.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_DEBUG_INFO_KHR,
-                                            .pNext = &abort_info};
+    VkDeviceFaultShaderAbortMessageInfoKHR abort_info = {.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_SHADER_ABORT_MESSAGE_INFO_KHR};
+    VkDeviceFaultDebugInfoKHR debug_info = {.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_DEBUG_INFO_KHR, .pNext = &abort_info};
 
     // 1st call: pMessageData is NULL, so this only fills in messageDataSize with the total
     VK_CHECK(pfnGetDeviceFaultDebugInfoKHR(device, &debug_info));
@@ -64,8 +63,8 @@ static void print_messages(VkDevice device, Sample sample, uint64_t max_message_
 
     if (pfnGetDeviceFaultDebugInfoKHR(device, &debug_info) == VK_INCOMPLETE) {
         // With VK_INCOMPLETE only whole messages are written and messageDataSize is overwritten with how many bytes that is.
-        printf("(VK_INCOMPLETE: only the first %llu bytes of messages fit, the rest were dropped)\n",
-               (uint64_t)abort_info.messageDataSize);
+        printf("(VK_INCOMPLETE: only the first %" PRIu64 " bytes of messages fit, the rest were dropped)\n",
+               abort_info.messageDataSize);
     }
 
     if (sample == SAMPLE_BASIC) {

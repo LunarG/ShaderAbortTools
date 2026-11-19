@@ -1,7 +1,7 @@
-# The style this repo is already written in: 4 spaces, 120 columns, attached braces, `Type* p`
+# The style this repo is already written in: 4 spaces, 132 columns, attached braces, `Type* p`
 BasedOnStyle: Google
 IndentWidth: 4
-ColumnLimit: 120
+ColumnLimit: 132
 AccessModifierOffset: -4
 DerivePointerAlignment: false
 PointerAlignment: Left
