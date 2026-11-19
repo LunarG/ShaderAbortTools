@@ -18,6 +18,7 @@ typedef enum Sample {
     SAMPLE_MULTIPLE = 3,
     SAMPLE_EACH = 4,
     SAMPLE_ASSERT = 5,
+    SAMPLE_LARGE = 6,
 } Sample;
 
 static const SampleInfo kSamples[] = {
@@ -27,6 +28,7 @@ static const SampleInfo kSamples[] = {
     {"multiple", "4 invocations abort, prints every message the device reports"},
     {"each", "the 'multiple' shader, read with shader_abort_for_each_message()"},
     {"assert", "the SHADER_ASSERT macros from shader_abort.glsl / .slang"},
+    {"large", "4096 invocations abort, more messages than the sample reads, so VK_INCOMPLETE"},
 };
 static const size_t kSampleCount = sizeof(kSamples) / sizeof(kSamples[0]);
 
@@ -38,34 +40,33 @@ static void custom_callback(const char* pText, void* pUserData) {
 }
 
 // Reading the messages back (shader_abort_message.h)
-static void print_messages(VkDevice device, Sample sample) {
+static void print_messages(VkDevice device, Sample sample, uint64_t max_message_size) {
     PFN_vkGetDeviceFaultDebugInfoKHR pfnGetDeviceFaultDebugInfoKHR =
         (PFN_vkGetDeviceFaultDebugInfoKHR)vkGetDeviceProcAddr(device, "vkGetDeviceFaultDebugInfoKHR");
-    if (pfnGetDeviceFaultDebugInfoKHR == NULL) {
-        fprintf(stderr, "vkGetDeviceFaultDebugInfoKHR is not available\n");
-        return;
-    }
 
-    VkDeviceFaultShaderAbortMessageInfoKHR abort_info;
-    memset(&abort_info, 0, sizeof(abort_info));
-    abort_info.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_SHADER_ABORT_MESSAGE_INFO_KHR;
+    VkDeviceFaultShaderAbortMessageInfoKHR abort_info = {
+        .sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_SHADER_ABORT_MESSAGE_INFO_KHR};
+    VkDeviceFaultDebugInfoKHR debug_info = {.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_DEBUG_INFO_KHR,
+                                            .pNext = &abort_info};
 
-    VkDeviceFaultDebugInfoKHR debug_info;
-    memset(&debug_info, 0, sizeof(debug_info));
-    debug_info.sType = VK_STRUCTURE_TYPE_DEVICE_FAULT_DEBUG_INFO_KHR;
-    debug_info.pNext = &abort_info;
-
-    // 1st call: pMessageData is NULL, so this only fills in messageDataSize
+    // 1st call: pMessageData is NULL, so this only fills in messageDataSize with the total
     VK_CHECK(pfnGetDeviceFaultDebugInfoKHR(device, &debug_info));
     if (abort_info.messageDataSize == 0) {
         printf("the device was lost, but not by a shader abort (no message)\n");
         return;
     }
 
-    // 2nd call: get the data
-    // (apps will want to handle allocation here themselves)
+    // 2nd call: get the data, but no more than the |maxShaderAbortMessageSize| property
+    if (abort_info.messageDataSize > max_message_size) {
+        abort_info.messageDataSize = max_message_size;
+    }
     abort_info.pMessageData = malloc((size_t)abort_info.messageDataSize);
-    VK_CHECK(pfnGetDeviceFaultDebugInfoKHR(device, &debug_info));
+
+    if (pfnGetDeviceFaultDebugInfoKHR(device, &debug_info) == VK_INCOMPLETE) {
+        // With VK_INCOMPLETE only whole messages are written and messageDataSize is overwritten with how many bytes that is.
+        printf("(VK_INCOMPLETE: only the first %llu bytes of messages fit, the rest were dropped)\n",
+               (uint64_t)abort_info.messageDataSize);
+    }
 
     if (sample == SAMPLE_BASIC) {
         // A message that is just a string needs no formatting, this points straight into pMessageData
@@ -81,14 +82,13 @@ static void print_messages(VkDevice device, Sample sample) {
         printf("(%zu message%s reported)\n", count, count == 1 ? "" : "s");
 
     } else {
-        // Walk every (size, payload) pair. A
-        // device has to report the first abort, and may report more.
+        // Walk every (size, payload) pair. A device has to report the first abort, and may report more.
         uint64_t offset = 0;
         ShaderAbortMessage message;
         ShaderAbortMessage previous = {0, NULL};
         size_t count = 0;
-        // An assert usually fails in many invocations at once,
-        // so a message with the same bytes as the one before it is only counted.
+        // An assert usually fails in many invocations at once, so a message with the same bytes as the one before it
+        // is only counted.
         size_t repeats = 0;
         while (shader_abort_next_message(abort_info.pMessageData, abort_info.messageDataSize, &offset, &message)) {
             count++;
@@ -140,6 +140,15 @@ static int run_sample(const Options* pOptions, const uint32_t* pCode, size_t cod
         vkDestroyInstance(instance, NULL);
         return 1;
     }
+
+    VkPhysicalDeviceShaderAbortPropertiesKHR abort_properties;
+    memset(&abort_properties, 0, sizeof(abort_properties));
+    abort_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_ABORT_PROPERTIES_KHR;
+    VkPhysicalDeviceProperties2 properties2;
+    memset(&properties2, 0, sizeof(properties2));
+    properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    properties2.pNext = &abort_properties;
+    vkGetPhysicalDeviceProperties2(gpu, &properties2);
 
     uint32_t family_count = 0;
     vkGetPhysicalDeviceQueueFamilyProperties(gpu, &family_count, NULL);
@@ -234,7 +243,7 @@ static int run_sample(const Options* pOptions, const uint32_t* pCode, size_t cod
     // Hard coded push constant data
     PushConstants push = {(uint32_t)pOptions->sample, 7, 4, 1.5f};
     vkCmdPushConstants(cb, pipeline_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof(PushConstants), &push);
-    vkCmdDispatch(cb, 1, 1, 1);
+    vkCmdDispatch(cb, pOptions->sample == SAMPLE_LARGE ? 64 : 1, 1, 1);
     VK_CHECK(vkEndCommandBuffer(cb));
 
     VkFenceCreateInfo fence_ci;
@@ -260,7 +269,7 @@ static int run_sample(const Options* pOptions, const uint32_t* pCode, size_t cod
     int exit_code = 0;
     if (result == VK_ERROR_DEVICE_LOST) {
         printf("VK_ERROR_DEVICE_LOST\n");
-        print_messages(device, (Sample)pOptions->sample);
+        print_messages(device, (Sample)pOptions->sample, abort_properties.maxShaderAbortMessageSize);
     } else if (result == VK_SUCCESS) {
         printf("the shader finished without aborting\n");
     } else if (result == VK_TIMEOUT) {

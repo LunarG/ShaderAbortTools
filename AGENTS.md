@@ -28,7 +28,8 @@ Facts, checked against the Vulkan headers (SDK 1.4.357.1), glslang and Slang 202
   * glslang's strings are arrays of 8-bit ints, so its shaders also declare `Int8` and need
     `VkPhysicalDeviceVulkan12Features::shaderInt8`
 * **Limit:** `VkPhysicalDeviceShaderAbortPropertiesKHR::maxShaderAbortMessageSize` is the largest single message, and is
-  at least 65536 bytes.
+  at least 65536 bytes. It includes the 8 byte size in front of the payload, so the largest payload is 8 bytes less.
+  It is also the smallest `pMessageData` that is guaranteed to hold the first message.
 * **Shader side:**
   * GLSL: `#extension GL_EXT_abort : require`, then `abortEXT("fmt", args...)`. glslang has no variadic macros and no
     string literal concatenation, so a GLSL assert macro can't be `ASSERT(cond, fmt, ...)`. glslang also limits a
@@ -43,11 +44,14 @@ Facts, checked against the Vulkan headers (SDK 1.4.357.1), glslang and Slang 202
      `pMessageData`.
   3. Load the function with `vkGetDeviceProcAddr`.
   `messageDataSize` is `0` when the device was lost for another reason.
+  4. The second call can return `VK_INCOMPLETE` (more messages than fit). That is not an error: only whole messages were
+     written, and `messageDataSize` is overwritten with the bytes written (`0` if not even the first fit). Use that
+     returned size, not the one you allocated, when parsing. Retrieval doesn't drain, so you can allocate more and call
+     again to get the rest.
 * **Only the first abort is guaranteed to be reported.** More may come back, so handle 0, 1, or many messages.
 * **The format specifier must match the argument's type**, including its size: `%hd` for `int16_t`, `%hhu` for
   `uint8_t`, `%hf` for `float16_t`, `%lu` for `uint64_t`, `%lf` for `double`. A `bool` is a 32-bit `uint`.
 * **Known RADV issues** (seen on Mesa 27.0.0-devel, `0b6d3f401e`, not re-checked on newer builds), found with the samples:
-  * Messages larger than 65528 bytes are dropped, even though `maxShaderAbortMessageSize` is 65536.
   * When the messages of many invocations add up to more than 64 KiB, `messageDataSize` counts the ones that didn't
     fit, and the driver copies memory from past the end of its buffer. The extra bytes are zeros or garbage, and zeros
     read as a run of empty messages (a 0 size is a valid, empty message, so the parser can't skip them).
@@ -174,6 +178,6 @@ than 512 bytes. There is no global state, so everything is thread-safe as long a
   need Vulkan 1.1. glslang makes SPIR-V 1.6 with `--target-env vulkan1.3`, which needs a Vulkan 1.3 instance and device.
 * The checked-in `.spv` were made with glslang `e2e8c812` (built from source, it needs the vector argument layout fix
   from `57623d72`) and Slang 2026.21, using the commands in `sample/README.md` ("Changing the shaders").
-* Every sample, with both shaders, has been run on RADV (Mesa 27.0.0-devel, AMD Radeon 780M) with no errors from
+* The `large` sample was not run to the end: the Mesa build tried (`6384fd60378`) crashes in `radv_GetDeviceFaultDebugInfoKHR`, which copies `messageDataSize` bytes without looking at the buffer size, so the `VK_INCOMPLETE` path is untested. The other samples, with both shaders, have been run on RADV (Mesa 27.0.0-devel, AMD Radeon 780M) with no errors from
   `VK_LAYER_KHRONOS_validation` (Vulkan SDK 1.4.357.1). RADV reports every abort, so `multiple` prints all 4 messages.
 * `util.h` has the command line, `.spv` loading and device selection. `sample.c` has the dispatch and message reading.

@@ -35,11 +35,12 @@ Needs Vulkan headers with `VK_KHR_shader_abort` (Vulkan SDK 1.4.357.0 or newer),
 | Sample | Shows |
 |---|---|
 | `basic` (default) | `abort("Hello from the basic sample!")`, read with `shader_abort_message_text()` |
-| `format` | A printf style message, with arguments from push constants |
+| `format` | A `printf` style message, with arguments from push constants |
 | `types` | Vectors (`%v3u`), signed, hex with flags and width (`%08x`), precision (`%.2f`) |
 | `multiple` | 4 invocations abort. Prints every message the device reports, which may be just one |
 | `each` | The `multiple` shader, read with `shader_abort_for_each_message()`: one call and a callback, no loop |
 | `assert` | The `SHADER_ASSERT` macros. Every invocation fails the same assert, so repeated messages are counted instead of printed |
+| `large` | 4096 invocations abort with the same message, about 160 KiB. Will handle `VK_INCOMPLETE` |
 
 ## Standalone tools
 
