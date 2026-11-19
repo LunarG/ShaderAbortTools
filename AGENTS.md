@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com -->
+<!-- SPDX-License-Identifier: MIT -->
+
 # Notes for AI coding agents
 
 If you were asked to add `VK_KHR_shader_abort` support, read abort messages, or make a shader with `abortEXT()` /

@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com -->
+<!-- SPDX-License-Identifier: MIT -->
+
 # ShaderAbortTools
 
 Small, "copy-into-your-project" style C helpers for working with `VK_KHR_shader_abort` (`SPV_KHR_abort`).

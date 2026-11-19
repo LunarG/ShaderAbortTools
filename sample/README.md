@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Spencer Fricke spencer@lunarg.com -->
+<!-- SPDX-License-Identifier: MIT -->
+
 # Samples
 
 A small program that runs an abort on your GPU and prints what comes back.
