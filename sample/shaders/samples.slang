@@ -53,9 +53,9 @@ void main(uint invocation : SV_GroupIndex)
         }
 
     } else if (pc.sample_id == SAMPLE_ASSERT) {
-        // The macros from shader_abort.slang.
-        SHADER_ASSERT_BOUNDS(pc.index, pc.count);
-        SHADER_ASSERT(pc.value >= 0.0, "value must not be negative, it was %f", pc.value);
+        // 4 invocations abort (0, 16, 32, 48)
+        bool some_condition = (invocation % 16) != 0;
+        SHADER_ASSERT_LINE(some_condition);
 
     } else if (pc.sample_id == SAMPLE_LARGE) {
         // dispatches 64 workgroups, so 4096 invocations abort at once.

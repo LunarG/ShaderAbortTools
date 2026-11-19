@@ -28,7 +28,7 @@ static const SampleInfo kSamples[] = {
     {"types", "vectors, signed, hex, width and precision"},
     {"multiple", "4 invocations abort, prints every message the device reports"},
     {"each", "the 'multiple' shader, read with shader_abort_for_each_message()"},
-    {"assert", "the SHADER_ASSERT macros from shader_abort.glsl / .slang"},
+    {"assert", "SHADER_ASSERT_LINE from shader_abort.glsl / .slang, fails in 4 invocations"},
     {"large", "4096 invocations abort, more messages than the sample reads, so VK_INCOMPLETE"},
 };
 static const size_t kSampleCount = sizeof(kSamples) / sizeof(kSamples[0]);
