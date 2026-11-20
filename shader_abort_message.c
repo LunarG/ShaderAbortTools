@@ -227,6 +227,18 @@ static void make_printf_format(const MessageSpecifier* pSpec, const char* pLengt
     snprintf(pOut, outSize, "%%%s*.*%s%c", flags, pLengthModifier, conversion);
 }
 
+// Some builds warn when snprintf() is not given a string literal (MSVC C4774, GCC/Clang -Wformat-nonliteral).
+// Here the format has to be built at runtime, because the shader picks the flags, width and precision.
+// It is safe: make_printf_format() builds it from known pieces, the shader's text is never used as the format.
+// (Clang on Windows also defines _MSC_VER, so it is checked first.)
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#elif defined(_MSC_VER)
+#pragma warning(push)
+#pragma warning(disable : 4774)
+#endif
+
 // Reads one argument (a single scalar) and appends it as text.
 // Returns false if the payload ran out of data.
 static bool format_scalar(const MessageSpecifier* pSpec, MessageArgReader* pReader, MessageWriter* pWriter) {
@@ -273,6 +285,12 @@ static bool format_scalar(const MessageSpecifier* pSpec, MessageArgReader* pRead
     }
     return true;
 }
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 // Handles one "%..." specifier. |pFormat| points at the character after the '%'.
 // Returns where to continue reading the format string from.

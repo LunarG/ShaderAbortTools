@@ -18,7 +18,9 @@ cmake -S . -B build
 cmake --build build
 
 # run
-./build/sample                       # the "basic" sample, with the GLSL shader
+./build/sample
+# (If on Windows)
+build\Debug\sample.exe
 
 # other samples
 ./build/sample format
