@@ -51,7 +51,8 @@ static void print_messages(VkDevice device, Sample sample, uint64_t max_message_
     // 1st call: pMessageData is NULL, so this only fills in messageDataSize with the total
     VK_CHECK(pfnGetDeviceFaultDebugInfoKHR(device, &debug_info));
     if (abort_info.messageDataSize == 0) {
-        printf("the device was lost, but not by a shader abort (no message)\n");
+        // Either the device was lost for another reason, or the driver didn't report the abort's message
+        printf("no shader abort message was reported (messageDataSize is 0)\n");
         return;
     }
 

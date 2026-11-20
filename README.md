@@ -115,7 +115,7 @@ For those who want to handle the message format more manually (to skip, count, c
 uint64_t offset = 0;
 ShaderAbortMessage message;
 while (shader_abort_next_message(abort_info.pMessageData, abort_info.messageDataSize, &offset, &message)) {
-    printf("message of %llu bytes\n", (uint64_t)message.size);
+    printf("message of %llu bytes\n", (unsigned long long)message.size);
 }
 ```
 

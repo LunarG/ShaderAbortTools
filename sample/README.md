@@ -11,7 +11,7 @@ A small program that runs an abort on your GPU and prints what comes back.
 ## Build and run
 
 ```bash
-cd samples/
+cd sample/
 
 # build
 cmake -S . -B build
